@@ -92,10 +92,10 @@
 		<button data-bind="click:LoadTree" class="uk-button uk-button-primary">Load</button>
 		<button data-bind="click:AddNew" class="uk-button uk-button-success">Add</button>
 		<a class="uk-button" href="game_tree_03-10 19-54.zip" target="_blank">Sample</a>
-		<select data-bind="foreach: SearchAttribute">
-			<option data-bind="text:title"></option>
+		<select data-bind="foreach: SearchAttribute, selectedOptions: chosenAttribute, event:{ change: searchBy }">
+			<option data-bind="text:title, attr: { value: title }"></option>
 		</select>
-		
+		<input data-bind="textInput:SearchName, event: {keypress: searchBy}">
 	</div>
 </div>
 <div class="uk-grid"><!-- MAIN CONTENT -->

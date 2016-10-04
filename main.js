@@ -222,7 +222,7 @@ String.prototype.replaceAll = function(searchStr, replaceStr) {
 		if(id)
 			return this.config.object[id];
 	};
-	GameClass.prototype.getType = function(obj,target){
+	GameClass.prototype.getType = function(obj,target,filter){
 		
 		var list = this.config.types[obj.type];
 		var arr = [];
@@ -234,7 +234,9 @@ String.prototype.replaceAll = function(searchStr, replaceStr) {
 		if(list){
 			for(var i in list){
 				var id = list[i];
-				arr.push(this.config.object[id]);
+				var item = this.config.object[id];
+				if(!filter || filter(item)) 
+					arr.push(item);
 			}
 		}
 		if(target){
@@ -385,12 +387,19 @@ String.prototype.replaceAll = function(searchStr, replaceStr) {
 		self.Types = ko.observableArray([]);
 		self.Attributes = ko.observableArray([]);
 		self.SearchAttribute = ko.observableArray([]);
+		self.SearchName = ko.observable();
+		self.chosenAttribute = ko.observable();
+		
 		self.Objects = ko.observableArray([]);
 		self.cMode = ko.observable();
 		self.Attribute = {};
 		self.selected = ko.observable();
 		var loading = false;
 		var selected;
+		var searchData = {
+			txt : '',
+			attr : ''
+		};
 		function init(){
 			$(".upload_image").on('change', function () {
 				if (typeof (FileReader) == "undefined") {
@@ -415,7 +424,6 @@ String.prototype.replaceAll = function(searchStr, replaceStr) {
 							previewImage.src = k;
 							if(selected){
 								selected.setAttribute('avatar',k);
-								self.Objects.valueHasMutated();
 							}
 						}
 
@@ -426,6 +434,39 @@ String.prototype.replaceAll = function(searchStr, replaceStr) {
 			self.ChangeAvatar = function(item){
 				selected = item;
 				$('#fileUpload').click();
+			};
+			
+			self.search = function(text,attribute){
+				if(text && attribute){
+					searchData.txt = text;
+					searchData.attr = attribute[0];
+				}else{					
+					searchData.txt = '';
+					searchData.attr = '';
+				}
+				self.refresh();
+			}
+			self.searchBy = function(model,event){
+				switch(event.type){
+					case 'change':
+						self.search(self.SearchName(),self.chosenAttribute());
+						//console.info('searchBy',self.SearchName(),self.chosenAttribute());
+						break;
+					case 'keypress':
+						if(event.keyCode === 13){
+							var key = event.target.value;
+							/*
+							ko.tasks.schedule(function () {
+							   BookData.search(key);
+							});
+							*/
+							self.search(self.SearchName(),self.chosenAttribute());
+						}else{
+							return true;
+						}
+						break;
+				}
+				
 			};
 			self.GetAttributeList = function(){
 				self.SearchAttribute.removeAll();
@@ -526,7 +567,6 @@ String.prototype.replaceAll = function(searchStr, replaceStr) {
 					self.selected(false);
 				}
 				loading = false;
-				self.Objects.valueHasMutated();
 			};
 			self.refresh = function(){		
 				loading = true;
@@ -536,7 +576,14 @@ String.prototype.replaceAll = function(searchStr, replaceStr) {
 
 				DataBase.getType({
 					type : 'character'
-				},self.Objects);
+				},self.Objects,function(obj){
+					if(searchData.attr!='' && searchData.txt!='' ){
+						var v = obj.getAttribute(searchData.attr);
+						if(v && v.indexOf(searchData.txt)>=0) return true;
+						return false;
+					}
+					return true;
+				});
 				loading = false;
 			};
 			self.GetAttribute = function(name,value,set){
