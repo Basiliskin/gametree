@@ -1,0 +1,297 @@
+<html>
+  <head>
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Game Tree</title>
+	
+    <script type="text/javascript" src="js/knockout-3.4.0.js"></script>
+	<script src="js/jquery-1.12.2.min.js"></script>
+	<script src="jquery-ui.js"></script>
+	<script src="js/jQuery.print.js"></script>
+	<script src="js/jszip.min.js"></script>
+	<script src="js/uikit.min.js"></script>
+	<script src="js/array_db.js"></script>
+	<script type="text/javascript" src="js/functions_cryptography.js"></script>
+	<script src="js/FileSaver.min.js"></script>
+	<link id="data-uikit-theme" rel="stylesheet" href="js/uikit.docs.min.css">
+	<link id="data-uikit-theme" rel="stylesheet" href="jquery-ui.css">
+	<style>
+	.selectedObject {
+		background-color: rgba(0,255,255,0.8);
+	}
+	.dialogOverlay{
+		background-color: rgba(255,255,255,0.8);
+		top:0;
+		left:0;
+		width:100%;
+		height: 100%;
+		overflow:visible;
+		z-index:4; 	
+		position: fixed; 
+		display: block;
+	}
+	.dialogWrapper {
+		position:absolute;
+		visibility:hidden;
+		overflow:visible;
+		z-index:10;
+		top:-2000px;
+		display: block; 
+		padding: 16px; 
+		opacity: 1;
+		transition: all 200ms;
+	}
+	.dialogHint {
+		line-height:16px;
+		border-width: 1px;   
+		border-color:#BBB;
+		padding:20px;
+		font-size: 12px;
+		font-family: Verdana, Arial;
+		border-radius:6px;
+		color:rgba(0,0,0,1); 
+		background:rgba(255,255,255,1);
+		box-shadow: 0 1px 8px rgba(0,0,0,1);
+		float:left;
+		border-style:solid;
+		position:relative;
+		overflow:hidden;
+		box-sizing:content-box;
+	}
+	.dialogInner{
+		top: auto; 
+		left: auto; 
+		transition: all 200ms; 
+		opacity: 1;
+		float:left;
+		position:relative;
+		width:auto;
+		height:auto;
+	}	
+	</style>
+	</head>
+  <body>
+<div class="uk-grid"><!-- MAIN CONTENT -->
+	<div class="uk-width-1-2">
+		<ul class="uk-subnav uk-subnav-pill" data-uk-switcher="{connect:'#my-id-one', animation: 'slide-vertical'}">
+			<li><a href="" id="menuGame">Main</a></li>
+		</ul>
+	</div>
+	<div class="uk-width-1-2">
+		<div class="uk-panel" data-bind="visible: Error">
+			<div class="uk-panel-badge uk-badge">!</div>
+			<h3 class="uk-panel-title">Error</h3>
+			<p data-bind="text:Error">
+			</p>
+		</div>
+		<input type="file" id="openFile" style="position:absolute;left:-1000px;width:0px;height:0px">
+		<input id="fileUpload" type="file" placeholder="Image" class="uk-form-small upload_image" style="position:absolute;left:-1000px;width:0px;height:0px" xattr="img_holder,gif,png,jpg,jpeg">
+		<button data-bind="click:SaveTree" class="uk-button uk-button-danger">Save</button>
+		<button data-bind="click:LoadTree" class="uk-button uk-button-primary">Load</button>
+		<button data-bind="click:AddNew" class="uk-button uk-button-success">Add</button>
+		<a class="uk-button" href="game_tree_03-10 19-54.zip" target="_blank">Sample</a>
+		<select data-bind="foreach: SearchAttribute">
+			<option data-bind="text:title"></option>
+		</select>
+		
+	</div>
+</div>
+<div class="uk-grid"><!-- MAIN CONTENT -->
+	<div class="uk-width-1-1">
+		<div> <!-- Data -->
+			<ul id="my-id-one" class="uk-switcher">
+				<li><!-- GAME -->
+					<div class="uk-grid"><!-- TABLE CONTENT -->
+						<div class="uk-width-1-1">
+							<div style="overflow:auto; height:80%;width:98%;margin:10px;border: 1mm solid orange;">
+								<table style="width:100%">
+								<tr>
+									<td valign="top" style="width:35%;">
+										<table>
+											<tbody data-bind="foreach: Objects">
+												<tr data-bind="css: { selectedObject: id==$root.selected() }">
+													<td valign="top">
+														<div class="uk-grid" >
+															<div class="uk-width-6-10">
+																<a href="#" class="uk-icon-small uk-icon-plus-square-o" data-bind="click: $root.EditAttribute(null,$data)"></a>
+																<a href="#" class="uk-icon-small uk-icon-copy" data-bind="click: $root.CopySelected($data)"></a>
+																<a href="#" class="uk-icon-small uk-icon-trash" data-bind="click: $root.RemoveSelected($data)"></a>
+																<span data-bind="click:$root.SelectObject.bind($data,$data),text:getAttribute('name')"></span>
+															</div>
+															<div class="uk-width-4-10" >
+																<div class="icons" >
+																	<a href="#" style="width:100%" data-bind="click:$root.ChangeAvatar.bind($data,$data)">
+																		<img data-bind="attr:{ title: 'avatar' ,src:avatar() }" >
+																	</a>
+																</div>
+															</div>
+														</div>
+													</td>
+												</tr>
+											</tbody>
+										</table>
+									</td>
+									<td valign="top" style="width:60%;">
+										<table data-bind="foreach: $root.Attributes" style="width:100%">
+											<tr  data-bind="visible:$root.canEdit(name)" style="width:100%">
+												<td  valign="top"  style="width:30%">
+													<a href="#" class="uk-button" data-bind="click: $root.EditAttribute($data)"><span data-bind="text: name"></span></a>
+												</td>
+												<td  valign="top" style="width:65%">
+													<span data-bind="text: $root.GetValue($data)"></span>
+												</td>
+												<td  valign="top"  style="width:5%">
+													<a href="#" class="uk-icon-button uk-icon-trash" data-bind="click: $root.RemoveAttribute($data)"></a>
+												</td>
+											</tr>
+										</table>
+									</td>
+									
+								</tr>
+								</table>
+							</div>
+						</div>
+					</div>	
+				</li>
+				
+			</ul>
+		</div>
+	</div>
+</div>
+<div id="dynamicDialog" style="display:none;">
+		<div class="dialogOverlay"></div>
+		<div class="dialogWrapper" style="visibility: visible;">
+			<div class="dialogHint">
+				<div class="dialogInner" >
+					<h3 class="uk-text-center">Dialog</h3>
+					<div id="dialogContent">
+							Loading
+					</div>
+				</div>
+			</div>
+		</div>
+</div>
+<div style="display:none;"><!-- dialogs -->
+	<div id="DynamicLoader" class="dtemplate">
+		<div>
+				Loading
+		</div>
+	</div>
+	<div id="new_object" class="dtemplate">
+		<form class="uk-form">
+			<fieldset>
+				<div class="uk-form-row">
+					<label class="uk-form-label" for="">Title</label>
+					<div class="uk-form-controls">
+						<input type="text" class="uk-form-small"  data-bind="value:Attribute['name']">
+					</div>
+				</div>
+				<div class="uk-form-row">
+					<label class="uk-form-label" for="">Description</label>
+					<div class="uk-form-controls">
+						<textarea id='txtData' data-bind="textInput:Attribute['description']" cols="60" rows="6">
+						</textarea>
+					</div>
+				</div>
+				<div class="uk-form-row">
+					<div class="uk-form-controls">
+						<button class="uk-button"  data-bind="click: SaveDialog">Save</button>
+						<button class="uk-button"  data-bind="click: CloseDialog">Close</button>
+						<button class="uk-button"  data-bind="visible:!isNew,click: RemoveItem">Remove</button>
+					</div>
+				</div>
+			</fieldset>
+		</form>
+	</div>
+	<div id="object_attribute" class="dtemplate">
+		<form class="uk-form">
+			<fieldset>
+				<div class="uk-form-row">
+					<label class="uk-form-label" for="">Name</label>
+					<div class="uk-form-controls">
+						<input type="text" class="uk-form-small"  data-bind="value:Attribute['name']">
+					</div>
+				</div>
+				<div class="uk-form-row">
+					<label class="uk-form-label" for="">Value</label>
+					<div class="uk-form-controls">
+						<input type="text" class="uk-form-small"  data-bind="value:Attribute['value']">
+					</div>
+				</div>
+				<div class="uk-form-row">
+					<label class="uk-form-label" for="">Description</label>
+					<div class="uk-form-controls">
+						<textarea id='txtData' data-bind="textInput:Attribute['description']" cols="60" rows="1">
+						</textarea>
+					</div>
+				</div>
+				<div class="uk-form-row">
+					<label class="uk-form-label" for="">Formula</label>
+					<div class="uk-form-controls">
+						<textarea data-bind="textInput:Attribute['formula']" cols="60" rows="1">
+						</textarea>
+					</div>
+				</div>
+				<div class="uk-form-row">
+					<label class="uk-form-label" for="">Params</label>
+					<div class="uk-form-controls">
+						<textarea data-bind="textInput:Attribute['params']" cols="60" rows="2">
+						</textarea>
+					</div>
+				</div>
+				<div class="uk-form-row">
+					<div class="uk-form-controls">
+						<button class="uk-button"  data-bind="click: SaveDialog">Save</button>
+						<button class="uk-button"  data-bind="click: CloseDialog">Close</button>
+						<button class="uk-button"  data-bind="visible:!isNew,click: RemoveItem">Remove</button>
+					</div>
+				</div>
+			</fieldset>
+		</form>
+	</div>	
+	<div id="DynamicSettings" class="dtemplate">
+		<form class="uk-form">
+			<fieldset>
+				<div class="uk-form-row">
+					<label class="uk-form-label" for="">Title</label>
+					<div class="uk-form-controls">
+						<input type="text" class="uk-form-small"  data-bind="value:current['title']">
+					</div>
+				</div>
+				<div class="uk-form-row">
+					<label class="uk-form-label" for="">Href</label>
+					<div class="uk-form-controls">
+						<input type="text" class="uk-form-small"  data-bind="value:current['href']">
+					</div>
+				</div>
+				<div class="uk-form-row">
+					<label class="uk-form-label" for="">Category</label>
+					<div class="uk-form-controls">
+						<input type="text" data-bind="value:current['category'],event: {keypress: onCategory2},ko_autocomplete: { source: Category(), select: setCategory2 }">		
+					</div>
+				</div>
+				<div class="uk-form-row">
+					<label class="uk-form-label" for="">Description</label>
+					<div class="uk-form-controls">
+						<textarea id='txtData' data-bind="textInput:current['description']" cols="60" rows="6">
+						</textarea>
+					</div>
+				</div>
+				<div class="uk-form-row">
+					<div class="uk-form-controls">
+						<button class="uk-button"  data-bind="click: SaveDialog">Save</button>
+						<button class="uk-button"  data-bind="click: CloseDialog">Close</button>
+						<button class="uk-button"  data-bind="visible:current,click: RemoveItem">Remove</button>
+					</div>
+				</div>
+			</fieldset>
+		</form>
+	</div>
+</div>
+
+	<script src="main.js"></script>
+	
+  </body>
+</html>
