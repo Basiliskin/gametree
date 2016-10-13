@@ -1,51 +1,14 @@
 	/*
 	
-	http://caragulak.nsupdate.info/proj/gametree/index.html 
-	
-	avatar:
-	manage: db,
-	find by attribute value
-	
+	http://caragulak.nsupdate.info/proj/gametree/index_v2.html 
+
+
+		Stats
+		
 	*/
-function _resize(img, maxWidth, maxHeight){
-    var ratio = 1;
-    var canvas = document.createElement("canvas");
-    canvas.style.display="none";
-    var ctx = canvas.getContext("2d");
-
-   
-	
-	canvas.width = maxWidth;
-	canvas.height = maxHeight;
-
-	ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-	var dataURL = canvas.toDataURL("image/png");
-
-	return dataURL;
-};
 
 	var db = new ArrayDB();
 	
-	function zipData(files,onfinish,name){
-		// create div = data;
-		var zip = new JSZip();
-		for(var i=0;i<files.length;i++){
-			var file = files[i];
-			switch(file.type){
-				case 'json':
-					zip.file(file.name, JSON.stringify(file.content));
-					break;
-				default:
-					zip.file(file.name,file.content);
-					break;
-			}
-		}
-		
-		zip.generateAsync({compression:'DEFLATE',type:"blob"}).then(function (blob) {
-			saveAs(blob, (name ? name : 'game_tree_')+new Date().toStr()+'.zip');
-			if(onfinish) onfinish();
-		});
-	}
 	ko.bindingHandlers.ko_autocomplete = {
 		init: function (element, params) {
 			$(element).autocomplete(params());
@@ -60,21 +23,23 @@ function _resize(img, maxWidth, maxHeight){
 	var MainModel = function() {
 		var self = this;
 		var templates = {};
-
-		var DataBase = new GameClass({
-			name : 'db',
-			description : 'data base'
-		});
-		self.Error = ko.observable();
-		var test = parseParams('@a@=a1[value]|@b@=100|@c@=0.5');
+		var gameDB = new GameDatabase();
 		
-		var result = CallFunction('@b@*@c@',test);
+		self.Error = ko.observable();
 		self.current = null;
 		self.Types = ko.observableArray([]);
 		self.Attributes = ko.observableArray([]);
 		self.SearchAttribute = ko.observableArray([]);
 		self.SearchName = ko.observable();
+		
+		self.chosenObject  = ko.observable();
+		self.chosenChild  = ko.observable();
+		self.chosenChildNot  = ko.observable();
+		
 		self.chosenAttribute = ko.observable();
+		
+		self.objChildren = ko.observableArray([]);
+		self.objChildrenNot = ko.observableArray([]);
 		
 		self.Objects = ko.observableArray([]);
 		self.cMode = ko.observable();
@@ -82,11 +47,150 @@ function _resize(img, maxWidth, maxHeight){
 		self.selected = ko.observable();
 		var loading = false;
 		var selected;
+		var target_obj;
 		var searchData = {
 			txt : '',
 			attr : ''
 		};
+		self.GetAttribute = function(name,value,set){
+			if(!self.Attribute[name]) self.Attribute[name] = ko.observable(value);
+			if(set){
+				self.Attribute[name](value);
+			}
+			return self.Attribute[name]();
+		};
+		
 		function init(){
+			self.activateObjectChildren  = function(item){				
+				if(selected){
+					gameDB.equip(selected.global_id,item.global_id,item.active());
+				}				
+				return true;
+			}
+			self.removeObjectChildren = function(item){
+				console.info('item',item);
+				var options = [];
+				if(selected && item){
+					gameDB.child_remove(selected,item.global_id);
+					self.getObjectChildren();
+				}
+			};
+			self.addObjectChildren = function(model,event){
+				var options = self.chosenChildNot();
+				if(selected && options.length>0){
+					gameDB.child_add(selected,options[0]);
+					self.getObjectChildren();
+				}
+			};
+			self.getObjectChildren = function(model,event){
+				if(loading) return;
+				loading = true;
+				var options = self.chosenObject();
+				if(options && options.length>0){
+					selected = gameDB.get(options[0]);
+					gameDB.children(selected,self.objChildren);
+					gameDB.children_not(selected,self.objChildrenNot);
+					//console.info('getObjectChildren',selected);
+				}
+				loading = false;
+			};
+			self.ManageTree = function(){
+				
+				self.selected(false);
+				self.cMode('manage');
+				self.current = {
+					type : 'manage'
+				};
+				loading = true;
+				gameDB.Objects(self.Objects);
+				loading = false;
+				self.ShowDialog('object_children');
+				
+			};
+			self.GetTitle = function(attr){
+				if(attr.max && attr.min)
+					return attr.min+'/'+attr.value+'/'+attr.max;
+				return attr.value;
+			};
+			self.AttributeRemove = function(attr,item){
+				if(loading) return;
+				loading = true;
+
+				target_obj = item || selected;
+				if(target_obj){
+					//console.log('AttributeRemove',target_obj,item,attr);
+					gameDB.remove_attr(target_obj,attr);
+					gameDB.Attributes(target_obj.global_id,self.Attributes);
+				}
+				target_obj = null;
+				loading = false;
+			};
+			self.ObjectAttribute = function(attr,item){
+				if(loading) return;
+				loading = true;
+				target_obj = item || selected;
+				if(!attr){
+					attr = {
+						name : '',
+						value : '',
+						type : 'attribute',
+						formula : '',
+						params : '',
+						min : '',
+						max : ''
+					};
+				}
+				self.cMode('attribute');
+				self.current = attr;
+				self.GetAttribute('name',attr.name,true);
+				self.GetAttribute('value',attr.value,true);
+				self.GetAttribute('formula',attr.formula,true);
+				self.GetAttribute('params',attr.params,true);
+				self.GetAttribute('min',attr.min,true);
+				self.GetAttribute('max',attr.max,true);
+				self.ShowDialog('object_attribute');
+				loading = false;
+				//console.log('ObjectAttribute',target_obj,item,attr);
+			};
+			self.canEdit = function(name){
+				return name.indexOf('$')!=0;
+			};
+
+			self.ObjectCopy = function(item){
+				if(loading) return;
+				loading = true;
+				gameDB.clone(item);
+				gameDB.Objects(self.Objects);
+				loading = false;
+			};
+			self.ObjectRemove = function(item){
+				if(loading) return;
+				loading = true;
+
+				console.log('ObjectRemove',selected);
+				//selected.getType({type:'attribute'},self.Attributes);
+				gameDB.remove(item);
+				self.refresh();
+				loading = false;
+			};
+			self.ObjectSelect = function(item){
+				if(loading) return;
+				loading = true;
+				selected = item || selected;
+				if(selected){
+					//selected.getType({type:'attribute'},self.Attributes);
+					self.selected(selected.global_id);
+					gameDB.children(selected,self.objChildren);
+					gameDB.Attributes(selected.global_id,self.Attributes);
+					var stats = gameDB.ATTR(selected.global_id);
+					console.log('ObjectSelect',selected,stats);
+				}else{
+					self.Attributes.removeAll();
+					self.Types.removeAll();
+					self.selected(false);
+				}
+				loading = false;
+			};
 			$(".upload_image").on('change', function () {
 				if (typeof (FileReader) == "undefined") {
 					 alert("This browser does not support FileReader.");
@@ -109,7 +213,7 @@ function _resize(img, maxWidth, maxHeight){
 							var k = _resize(previewImage, maxx, maxy);
 							previewImage.src = k;
 							if(selected){
-								selected.setAttribute('avatar',k);
+								//selected.setAttribute('avatar',k);
 							}
 						}
 
@@ -154,186 +258,56 @@ function _resize(img, maxWidth, maxHeight){
 				}
 				
 			};
-			self.GetAttributeList = function(){
-				self.SearchAttribute.removeAll();
-				var arr = {
-					hash : {},
-					items : self.SearchAttribute()
-				};
-				DataBase.GetAttributes(arr);
-				self.SearchAttribute.valueHasMutated();
-			};
-			self.GetAvatar = function(item) {
-				if(item) return item.getAttribute('avatar');
-			};//ko.computed();
-			self.GetValue = function(item){
-				
-				if(item.formula && item.params){
-					//console.info('GetValue',item);
-					return DataBase.calculate(item);
-				}
-				if(item.value)
-					return item.value;
-			};
-			self.RemoveSelected = function(item){
-				if(!item || loading) return;
-				//console.info('RemoveSelected',item);
-				loading = true;
-				selected = null;
-				self.selected(false);
-				self.Attributes.removeAll();
-				self.Types.removeAll();
-
-				DataBase.remove(item);
-				loading = false;
-				self.refresh();
-			};
-			self.CopySelected = function(item){
-				if(!item || loading) return;
-				//console.info('CopySelected',item);
-				loading = true;
-				self.selected(false);
-				selected = null;
-				DataBase.copy(item);
-				loading = false;
-				self.refresh();
-			};
-			self.RemoveAttribute = function(attr){
-				if(!selected || loading || !attr) return;
-				selected.remove(attr);
-				self.SelectObject();
-			};
-			self.EditAttribute = function(attr,item){
-				if(loading) return;
-
-				if(item){
-					selected = item;
-				}
-				if(!attr){
-					attr = {
-						name : '',
-						description : '',
-						value : '',
-						type : 'attribute',
-						formula : '',
-						params : ''
-					};
-				}
-				//console.info('EditAttribute',self.selected,attr,item);
-				self.cMode(attr.type);
-				self.SaveIfChanged();
-				self.current = attr;
-				self.GetAttribute('name',attr.name,true);
-				self.GetAttribute('description',attr.description,true);
-				self.GetAttribute('value',attr.value,true);
-				self.GetAttribute('formula',attr.formula,true);
-				self.GetAttribute('params',attr.params,true);
-				self.ShowDialog('object_attribute');
-			};
-			self.canEdit = function(type){
-				switch(type){
-					case 'type': 
-					case 'avatar': 
-						return false;
-						break;
-				}
-				return true;
-			};
-			self.SelectObject = function(item){
-				loading = true;
-				//console.info('SelectObject',item);
-				selected = item || selected;
-				if(selected){
-					selected.getType({type:'attribute'},self.Attributes);
-					selected.getTypes([],self.Types);
-					self.selected(selected.id);
-				}else{
-					self.Attributes.removeAll();
-					self.Types.removeAll();
-					self.selected(false);
-				}
-				loading = false;
-			};
+			
 			self.refresh = function(){		
 				loading = true;
 				self.Attributes.removeAll();
 				self.Types.removeAll();
-				self.GetAttributeList();
 
-				DataBase.getType({
-					type : 'character'
-				},self.Objects,function(obj){
-					if(searchData.attr!='' && searchData.txt!='' ){
-						var v = obj.getAttribute(searchData.attr);
-						if(v && v.indexOf(searchData.txt)>=0) return true;
-						return false;
-					}
-					return true;
-				});
+				gameDB.Objects(self.Objects);
 				loading = false;
 			};
-			self.GetAttribute = function(name,value,set){
-				if(!self.Attribute[name]) self.Attribute[name] = ko.observable(value);
-				if(set){
-					self.Attribute[name](value);
-				}
-				return self.Attribute[name]();
-			};
-			self.SaveIfChanged = function(){
-				if(self.current){
-					
-				}
-			};
-			self.isNew = function(){
-				return !self.current.id;
-			};
+
 			self.SaveDialog = function(model,event){
-				
+				loading = true;
 				self.CloseDialog();
 				self.current.type = self.current.type || self.cMode();
+				console.log('SaveDialog',selected,target_obj,self.current);
 				switch(self.current.type){
 					case 'attribute':
 						self.current.name = self.GetAttribute('name');
-						self.current.description = self.GetAttribute('description');
 						self.current.value = self.GetAttribute('value');
 						self.current.formula = self.GetAttribute('formula');
 						self.current.params = self.GetAttribute('params');
-						
-						console.info('SaveDialog',selected,self.current);
-						selected.add(self.current);
-
-						if(self.current.name=='name') self.refresh();
-
-						self.SelectObject();
-						
+						self.current.min = self.GetAttribute('min');
+						self.current.max = self.GetAttribute('max');
+						if(target_obj){
+							gameDB.change(target_obj,self.current);
+							loading = false;
+							self.ObjectSelect();
+						}
+						target_obj = null;
 						break;
-					case 'character':
-						loading = true;
-						self.current.name = self.GetAttribute('name');
-						self.current.description = self.GetAttribute('description');
-						
-						self.current = new GameClass(self.current);
-						DataBase.add(self.current);
-						loading = false;
+					case 'object':
+						gameDB.add(self.GetAttribute('name'));
 						self.refresh();
 						break;
 				}
+				//self.selected(false);
+				loading = false;
 				//console.info('SaveDialog',self.cMode(),self.current);
 			};
 			self.AddNew = function(model,event,type){
 				//console.info('AddNew',type);
-				type = type || 'character';
+				type = type || 'object';
 				self.selected(false);
 				self.cMode(type);
-				self.SaveIfChanged();
 				self.current = {
 					type : type
 				};
 				self.GetAttribute('name','',true);
-				self.GetAttribute('description','',true);
 				
 				self.ShowDialog('new_object');
-				//console.info('AddNew',type,self.cMode());
 			};
 			self.RemoveItem = function(model,event){
 				self.CloseDialog();
@@ -391,14 +365,13 @@ function _resize(img, maxWidth, maxHeight){
 			var data = jQuery.parseJSON( content );
 			console.info('loadDataBase',data);
 			selected = null;
-			DataBase.SetConfig(data);
+			gameDB.config(data);
+			// DataBase.SetConfig(data);
 			self.refresh();
-			self.SelectObject(null);
-			
 			self.Loading(false);
 		};
 		self.SaveTree = function(){
-			var conf = DataBase.GetConfig();
+			var conf = gameDB.config();
 			var file = {
 				type : 'json',
 				name : 'gametree.json',
